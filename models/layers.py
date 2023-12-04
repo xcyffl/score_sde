@@ -36,7 +36,7 @@ def get_act(config):
     return nn.relu
   elif config.model.nonlinearity.lower() == 'lrelu':
     return functools.partial(nn.leaky_relu, negative_slope=0.2)
-  elif config.model.nonlinearity.lower() == 'swish':
+  elif config.model.nonlinearity.lower() == 'swish': #what is this swish activation function
     return nn.swish
   else:
     raise NotImplementedError('activation function does not exist!')
@@ -79,8 +79,8 @@ def ncsn_conv3x3(x, out_planes, stride=1, bias=True, dilation=1, init_scale=1.):
   init_scale = 1e-10 if init_scale == 0 else init_scale
   kernel_init = jnn.initializers.variance_scaling(1 / 3 * init_scale, 'fan_in',
                                                   'uniform')
-  kernel_shape = (3, 3) + (x.shape[-1], out_planes)
-  bias_init = lambda key, shape: kernel_init(key, kernel_shape)[0, 0, 0, :]
+  kernel_shape = (3, 3) + (x.shape[-1], out_planes) #kernel_shape is (3, 3, x_c, out_c)
+  bias_init = lambda key, shape: kernel_init(key, kernel_shape)[0, 0, 0, :] #bias_init shape is (1, 1, 1, out_c)
   output = nn.Conv(out_planes,
                    kernel_size=(3, 3),
                    strides=(stride, stride),
@@ -119,12 +119,13 @@ class CRPBlock(nn.Module):
   features: int
   n_stages: int
   act: Any = nn.relu
-
+  #allowing inlined submodules
   @nn.compact
   def __call__(self, x):
     x = self.act(x)
     path = x
     for _ in range(self.n_stages):
+      #these two operations maintain the shape of the input
       path = nn.max_pool(
         path, window_shape=(5, 5), strides=(1, 1), padding='SAME')
       path = ncsn_conv3x3(path, self.features, stride=1, bias=False)
@@ -138,7 +139,7 @@ class CondCRPBlock(nn.Module):
   n_stages: int
   normalizer: Any
   act: Any = nn.relu
-
+  # Noise-conditional normalize it first and then using avgpool
   @nn.compact
   def __call__(self, x, y):
     x = self.act(x)
@@ -157,7 +158,7 @@ class RCUBlock(nn.Module):
   n_blocks: int
   n_stages: int
   act: Any = nn.relu
-
+  #residual as the input, refine it using stacks of act conv, then skip connect with the residual for the next layer
   @nn.compact
   def __call__(self, x):
     for _ in range(self.n_blocks):
@@ -169,7 +170,7 @@ class RCUBlock(nn.Module):
 
     return x
 
-
+'''same as the above, but with noise-conditional, normalizer is used'''
 class CondRCUBlock(nn.Module):
   """Noise-conditional RCUBlock for RefineNet. Used in NCSNv1."""
   features: int
@@ -177,7 +178,7 @@ class CondRCUBlock(nn.Module):
   n_stages: int
   normalizer: Any
   act: Any = nn.relu
-
+  
   @nn.compact
   def __call__(self, x, y):
     for _ in range(self.n_blocks):
@@ -189,13 +190,13 @@ class CondRCUBlock(nn.Module):
       x += residual
     return x
 
-
+'''Summation of each xs, which is first processed by 3 by 3 conv, and then interpolated to the desired size.'''
 class MSFBlock(nn.Module):
   """MSFBlock for RefineNet. Used in NCSNv2."""
   shape: Sequence[int]
   features: int
   interpolation: str = 'bilinear'
-
+  
   @nn.compact
   def __call__(self, xs):
     sums = jnp.zeros((xs[0].shape[0], *self.shape, self.features))
@@ -210,7 +211,7 @@ class MSFBlock(nn.Module):
       sums = sums + h
     return sums
 
-
+'''Noise-conditional is to first apply normalization layer to the input'''
 class CondMSFBlock(nn.Module):
   """Noise-conditional MSFBlock for RefineNet. Used in NCSNv1."""
   shape: Sequence[int]
@@ -307,8 +308,7 @@ class CondRefineBlock(nn.Module):
     h = crp()(h, y)
     h = rcu_block_output()(h, y)
     return h
-
-
+'''conducted over a local 2 by 2 window'''
 class ConvMeanPool(nn.Module):
   """ConvMeanPool for building the ResNet backbone."""
   output_dim: int
@@ -328,7 +328,7 @@ class ConvMeanPool(nn.Module):
     ]) / 4.
     return output
 
-
+'''same as the above function but avg before conv'''
 class MeanPoolConv(nn.Module):
   """MeanPoolConv for building the ResNet backbone."""
   output_dim: int
@@ -395,7 +395,7 @@ class ResidualBlock(nn.Module):
 
     return h + shortcut
 
-
+'''conditional is passing parameters to the normalization layer'''
 class ConditionalResidualBlock(nn.Module):
   """The noise-conditional residual block for building NCSNv1."""
   output_dim: int
