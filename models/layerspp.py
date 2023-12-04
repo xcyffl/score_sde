@@ -29,7 +29,8 @@ conv3x3 = layers.ddpm_conv3x3
 NIN = layers.NIN
 default_init = layers.default_init
 
-
+'''sin and cos of x * w * 2pi'''
+'''W is initialized as norm without backpropagation'''
 class GaussianFourierProjection(nn.Module):
   """Gaussian Fourier embeddings for noise levels."""
   embedding_size: int = 256
